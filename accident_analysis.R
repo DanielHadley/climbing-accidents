@@ -398,57 +398,74 @@ ad %>%
 
 
 
-# GPT text analysis -------------------------------------------------------
 
-#protection pulled
-pp <- ad %>% filter(inadequate_protection_pulled == 1) %>% 
-  select(id, text) %>% 
-  mutate(
-    Gear_Type_Involved = NA,  # New column for "Gear Type Involved in Incident"
-    Gear_Placement_Quality = NA,  # New column for "Gear Placement Quality"
-    Causes_of_Gear_Failure = NA,  # New column for "Causes of Gear Failure"
-    Lessons_for_Placing_Good_Gear = NA  # New column for "Lessons for Placing Good Gear"
+# Text analysis -----------------------------------------------------------
+
+
+library(tidytext)
+
+# Sample incident reports data (replace with your actual data)
+incident_data <- ad %>% 
+  filter(inadequate_protection_pulled ==1) %>% 
+  mutate(incident_description = text)
+
+# Define keywords for each category
+tags <- list(
+  gear_type = c(
+    "cam", "nut", "hex", "tricam", "anchor sling", "webbing", "carabiner", "rope", "anchor system"
+  ),
+  placement_quality = c(
+    "shallow placement", "poor surface contact", "undercamming", "overcammed", "improper angle", 
+    "walking gear", "flared crack", "rotational instability"
+  ),
+  gear_failure = c(
+    "directional misalignment", "rock quality", "rope drag", "insufficient redundancy", "gear size mismatch", 
+    "load dynamics", "poor crack assessment", "improper extension"
   )
+)
 
-# Split the dataset into N files with 10 rows each
-split_size <- 10  # Number of rows per split
-n_files <- ceiling(nrow(pp) / split_size)  # Calculate the number of split files
-
-# Create directory to save split files (if it does not already exist)
-split_dir <- "~/Github/climbing-accidents/protection_pulled/"
-dir.create(split_dir, showWarnings = FALSE)
-
-# Split and save the files
-for (i in 1:n_files) {
-  start_row <- (i - 1) * split_size + 1
-  end_row <- min(i * split_size, nrow(pp))
-  split_data <- pp[start_row:end_row, ]
-  split_file_path <- file.path(split_dir, paste0("incident_data_part_", i, ".csv"))
-  write.csv(split_data, split_file_path, row.names = FALSE)
+# Function to create tags based on keywords
+create_tags <- function(text, tags) {
+  text_lower <- tolower(text)
+  sapply(tags, function(keywords) {
+    any(sapply(keywords, function(keyword) str_detect(text_lower, keyword)))
+  })
 }
 
+# Apply the function to each row and create new columns for tags
+incident_tags <- incident_data %>%
+  rowwise() %>%
+  mutate(
+    cam = create_tags(incident_description, tags$gear_type)["cam"],
+    nut = create_tags(incident_description, tags$gear_type)["nut"],
+    hex = create_tags(incident_description, tags$gear_type)["hex"],
+    tricam = create_tags(incident_description, tags$gear_type)["tricam"],
+    anchor_sling_webbing = create_tags(incident_description, tags$gear_type)["anchor sling"],
+    carabiner = create_tags(incident_description, tags$gear_type)["carabiner"],
+    rope = create_tags(incident_description, tags$gear_type)["rope"],
+    anchor_system = create_tags(incident_description, tags$gear_type)["anchor system"],
+    shallow_placement = create_tags(incident_description, tags$placement_quality)["shallow placement"],
+    poor_surface_contact = create_tags(incident_description, tags$placement_quality)["poor surface contact"],
+    undercamming = create_tags(incident_description, tags$placement_quality)["undercamming"],
+    overcammed = create_tags(incident_description, tags$placement_quality)["overcammed"],
+    improper_angle = create_tags(incident_description, tags$placement_quality)["improper angle"],
+    walking_gear = create_tags(incident_description, tags$placement_quality)["walking gear"],
+    flared_crack = create_tags(incident_description, tags$placement_quality)["flared crack"],
+    rotational_instability = create_tags(incident_description, tags$placement_quality)["rotational instability"],
+    directional_misalignment = create_tags(incident_description, tags$gear_failure)["directional misalignment"],
+    rock_quality = create_tags(incident_description, tags$gear_failure)["rock quality"],
+    rope_drag = create_tags(incident_description, tags$gear_failure)["rope drag"],
+    insufficient_redundancy = create_tags(incident_description, tags$gear_failure)["insufficient redundancy"],
+    gear_size_mismatch = create_tags(incident_description, tags$gear_failure)["gear size mismatch"],
+    load_dynamics = create_tags(incident_description, tags$gear_failure)["load dynamics"],
+    poor_crack_assessment = create_tags(incident_description, tags$gear_failure)["poor crack assessment"],
+    improper_extension = create_tags(incident_description, tags$gear_failure)["improper extension"]
+  ) %>%
+  ungroup()
 
-Objective: You are provided with a CSV containing trad climbing accident reports. For each report, complete the missing columns by categorizing the incident according to the specified categories and tags. You will be filling in as many rows as possible given memory constraints. Please read the report carefully to ensure the tags are correct.
+# View the tagged data
+print(incident_tags)
 
-Instructions:
-  Input CSV Structure: The CSV file contains the following columns:
-
-  Incident Report: A description of a climbing incident.
-Gear Type Involved in Incident: (Fill in with applicable tags)
-Gear Placement Quality: (Fill in with applicable tags)
-Causes of Gear Failure: (Fill in with applicable tags)
-Lessons for Placing Good Gear: (Fill in with applicable tags)
-Tag Lists:
-
-  Gear Type Involved in Incident: Cam, Nut, Hex, Tricam, Anchor Sling/Webbing, Carabiner, Rope/Rope System, Anchor System
-Gear Placement Quality: Shallow Placement, Poor Surface Contact, Undercamming, Overcammed, Improper Angle, Walking Gear, Flared Crack, Rotational Instability
-Causes of Gear Failure: Directional Misalignment, Rock Quality, Rope Drag, Insufficient Redundancy, Gear Size Mismatch, Load Dynamics, Poor Crack Assessment, Improper Extension
-Lessons for Placing Good Gear: Assess Rock Quality, Correct Size & Fit, Alignment with Fall Direction, Redundancy, Use Extenders, Avoid Flared Placements, Test Stability, Understand Load Dynamics
-How to Fill In the Data:
-
-  Gear Type Involved in Incident: Identify the type(s) of gear mentioned in the report and tag accordingly.
-Gear Placement Quality: Identify any mention of issues with the quality of the gear placement. Select all applicable tags.
-Causes of Gear Failure: Identify reasons why the gear failed and assign relevant tags.
-Lessons for Placing Good Gear: Identify the key lessons that can be learned from the report and assign tags accordingly.
-Format: The data should be returned in CSV format with completed rows, maintaining the same structure as the input file.
+# Save the tagged data to a new CSV file
+write_csv(incident_tags, "tagged_incident_data.csv")
 
