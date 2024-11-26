@@ -13,7 +13,8 @@ grey_background = "#f4f4f0ff"
 ## TODO : 
 
 ad <- read_csv("~/Github/climbing-accidents/_github-AAC_accidents_tagged_data.csv") %>% 
-  clean_names()
+  clean_names() %>% 
+  mutate(word_count_report = sapply(strsplit(text, "\\s+"), length))
 
 
 # 1. Season:
@@ -92,6 +93,8 @@ ad <- ad %>%
       anchor_failure_error == 1 ~ "Anchor Failure",
       gear_broke == 1 ~ "Gear Failure",
       object_dropped_dislodged == 1 ~ "Falling Object",
+      inadequate_protection_pulled == 1 ~ "Protection Pulled",
+      inadequate_equipment == 1 ~ "Inadequate Equipment",
       TRUE ~ "Other"
     )
   )
@@ -118,6 +121,7 @@ ad <- ad %>%
 
 # Sport vs. trad accidents over the years
 ad %>%
+  # filter(is.na(inadequate_protection_pulled)) %>% 
   filter(activity_type %in% c("Sport Climbing", "Trad Climbing")) %>% # Filter for Sport and Trad climbing activities
   group_by(publication_year, activity_type) %>% # Group by year and activity type
   summarise(count = n(), .groups = "drop") %>% # Count the number of accidents per type per year
@@ -392,9 +396,59 @@ ad %>%
   theme_classic()
 
 
-ad %>%
-  filter(activity_type == "Trad Climbing", inadequate_protection_pulled == 1) %>% 
-  select(id, accident_title, text) %>% 
-  write_csv("~/Downloads/ipp.csv")
 
+
+# GPT text analysis -------------------------------------------------------
+
+#protection pulled
+pp <- ad %>% filter(inadequate_protection_pulled == 1) %>% 
+  select(id, text) %>% 
+  mutate(
+    Gear_Type_Involved = NA,  # New column for "Gear Type Involved in Incident"
+    Gear_Placement_Quality = NA,  # New column for "Gear Placement Quality"
+    Causes_of_Gear_Failure = NA,  # New column for "Causes of Gear Failure"
+    Lessons_for_Placing_Good_Gear = NA  # New column for "Lessons for Placing Good Gear"
+  )
+
+# Split the dataset into N files with 10 rows each
+split_size <- 10  # Number of rows per split
+n_files <- ceiling(nrow(pp) / split_size)  # Calculate the number of split files
+
+# Create directory to save split files (if it does not already exist)
+split_dir <- "~/Github/climbing-accidents/protection_pulled/"
+dir.create(split_dir, showWarnings = FALSE)
+
+# Split and save the files
+for (i in 1:n_files) {
+  start_row <- (i - 1) * split_size + 1
+  end_row <- min(i * split_size, nrow(pp))
+  split_data <- pp[start_row:end_row, ]
+  split_file_path <- file.path(split_dir, paste0("incident_data_part_", i, ".csv"))
+  write.csv(split_data, split_file_path, row.names = FALSE)
+}
+
+
+Objective: You are provided with a CSV containing trad climbing accident reports. For each report, complete the missing columns by categorizing the incident according to the specified categories and tags. You will be filling in as many rows as possible given memory constraints. Please read the report carefully to ensure the tags are correct.
+
+Instructions:
+  Input CSV Structure: The CSV file contains the following columns:
+
+  Incident Report: A description of a climbing incident.
+Gear Type Involved in Incident: (Fill in with applicable tags)
+Gear Placement Quality: (Fill in with applicable tags)
+Causes of Gear Failure: (Fill in with applicable tags)
+Lessons for Placing Good Gear: (Fill in with applicable tags)
+Tag Lists:
+
+  Gear Type Involved in Incident: Cam, Nut, Hex, Tricam, Anchor Sling/Webbing, Carabiner, Rope/Rope System, Anchor System
+Gear Placement Quality: Shallow Placement, Poor Surface Contact, Undercamming, Overcammed, Improper Angle, Walking Gear, Flared Crack, Rotational Instability
+Causes of Gear Failure: Directional Misalignment, Rock Quality, Rope Drag, Insufficient Redundancy, Gear Size Mismatch, Load Dynamics, Poor Crack Assessment, Improper Extension
+Lessons for Placing Good Gear: Assess Rock Quality, Correct Size & Fit, Alignment with Fall Direction, Redundancy, Use Extenders, Avoid Flared Placements, Test Stability, Understand Load Dynamics
+How to Fill In the Data:
+
+  Gear Type Involved in Incident: Identify the type(s) of gear mentioned in the report and tag accordingly.
+Gear Placement Quality: Identify any mention of issues with the quality of the gear placement. Select all applicable tags.
+Causes of Gear Failure: Identify reasons why the gear failed and assign relevant tags.
+Lessons for Placing Good Gear: Identify the key lessons that can be learned from the report and assign tags accordingly.
+Format: The data should be returned in CSV format with completed rows, maintaining the same structure as the input file.
 
